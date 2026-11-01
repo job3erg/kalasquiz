@@ -173,9 +173,9 @@ body[data-theme="lime"] .logo span{background:var(--ink); color:var(--lime)}
 <script>
 /* ================== QUIZ CONTENT ================== */
 const ROUNDS = [
-  { title:"Runda 1: Gissa introt", note:"Spelledaren spelar 5 sekunder av låten. 1 poäng för låten, 1 för artisten.", qs:[
-    {kind:"intro", prompt:"Låt 1", parts:[{l:"Låt",a:["golden"]},{l:"Artist",a:["huntrx","huntr x","huntr/x","kpop demon hunters","k-pop demon hunters"]}]},
-    {kind:"intro", prompt:"Låt 2", parts:[{l:"Låt",a:["flowers"]},{l:"Artist",a:["miley cyrus","miley"]}]},
+  { title:"Runda 1: Gissa introt", note:"Spelledaren spelar en kort bit av låten. 1 poäng för låten, 1 för artisten.", qs:[
+    {kind:"intro", prompt:"Låt 1", parts:[{l:"Låt",a:["blinding lights"]},{l:"Artist",a:["the weeknd","weeknd"]}]},
+    {kind:"intro", prompt:"Låt 2", ms:8000, parts:[{l:"Låt",a:["flowers"]},{l:"Artist",a:["miley cyrus","miley"]}]},
     {kind:"intro", prompt:"Låt 3", parts:[{l:"Låt",a:["dance monkey"]},{l:"Artist",a:["tones and i","tones"]}]},
     {kind:"intro", prompt:"Låt 4", parts:[{l:"Låt",a:["shake it off"]},{l:"Artist",a:["taylor swift","taylor"]}]},
     {kind:"intro", prompt:"Låt 5", parts:[{l:"Låt",a:["apt"]},{l:"Artist",a:["rose","bruno mars","rose bruno mars"]}]},
@@ -222,7 +222,7 @@ const ROUNDS = [
 
 /* Spotify: [titel, artist] för frågor där låten kan spelas upp automatiskt */
 const SP_TRACKS = {
-  0:[["Golden","HUNTR/X"],["Flowers","Miley Cyrus"],["Dance Monkey","Tones and I"],["Shake It Off","Taylor Swift"],
+  0:[["Blinding Lights","The Weeknd"],["Flowers","Miley Cyrus"],["Dance Monkey","Tones and I"],["Shake It Off","Taylor Swift"],
      ["APT.","ROSÉ Bruno Mars"],["Pink Pony Club","Chappell Roan"],["Beautiful Things","Benson Boone"],["Lush Life","Zara Larsson"]],
   1:[["Espresso","Sabrina Carpenter"],["Birds of a Feather","Billie Eilish"],["Bara Bada Bastu","KAJ"],["Watermelon Sugar","Harry Styles"],
      ["Bye Bye Bye","NSYNC"],["Murder on the Dancefloor","Sophie Ellis-Bextor"],["Golden","HUNTR/X"],["Running Up That Hill","Kate Bush"]],
@@ -247,6 +247,7 @@ function answerText(q){
     "running up that hill":"Running Up That Hill", "stranger things":"Stranger Things", deadpool:"Deadpool & Wolverine",
     saltburn:"Saltburn", "1974":"1974", "saja boys":"Saja Boys", "high school musical":"High School Musical: The Musical: The Series",
     finneas:"Finneas", finland:"Finland", "max martin":"Max Martin", hov1:"Hov1",
+    "blinding lights":"Blinding Lights", "the weeknd":"The Weeknd",
     flowers:"Flowers", "miley cyrus":"Miley Cyrus", "dance monkey":"Dance Monkey", "tones and i":"Tones and I",
     "shake it off":"Shake It Off", "taylor swift":"Taylor Swift"
   };
@@ -426,9 +427,10 @@ async function spPlay(q, ms){
   }
 }
 const qById = id => { const s = STEPS.find(s=>s.type==="q" && s.q.id===id); return s && s.q; };
-window.__spTest = id => spPlay(qById(id), 5000);
+const snippetMs = q => (q && q.ms) || 5000;      // hur länge introt spelas (ms)
+window.__spTest = id => { const q=qById(id); spPlay(q, snippetMs(q)); };
 window.__spFull = id => spPlay(qById(id), 0);
-window.__spReplay = id => spPlay(qById(id), 5000);
+window.__spReplay = id => { const q=qById(id); spPlay(q, snippetMs(q)); };
 window.__spList = ()=>{ SP.showList = !SP.showList; SP.onChange(); };
 function spBadge(){ return !SP.tok ? "" : SP.ready ? " · Spotify ✓" : " · Spotify…"; }
 function spBox(){
@@ -449,7 +451,7 @@ function spList(){
     const found = !tr ? "söker…" : tr.missing ? "<strong>hittades inte</strong>" : `${esc(tr.name)} – ${esc(tr.artist)}`;
     return `<div class="sp-row"><span><span class="small">${label}:</span> ${found}</span>${tr&&!tr.missing?`<button class="mark ok" onclick="__spTest('${q.id}')">▶</button>`:""}</div>`;
   }).join("");
-  return `<div class="sp-list">${rows}</div><div class="small" style="margin-top:.6em">Kolla att rätt version hittats. Knappen spelar 5 sekunder.</div>`;
+  return `<div class="sp-list">${rows}</div><div class="small" style="margin-top:.6em">Kolla att rätt version hittats. Knappen spelar introt (5 sekunder, Flowers 8).</div>`;
 }
 
 /* ================== HOST ================== */
@@ -561,7 +563,7 @@ function startHost(){
     else if(S.phase==="winner"){ S.phase="scores"; }
     broadcast();
     if(S.phase==="winner") confetti(7);
-    const nq = curQ(); if(S.phase==="question" && nq && nq.kind==="intro") spPlay(nq, 5000);
+    const nq = curQ(); if(S.phase==="question" && nq && nq.kind==="intro") spPlay(nq, snippetMs(nq));
   }
   function resetQuiz(){
     if(!confirm("Starta ett nytt quiz? Alla lag och poäng försvinner.")) return;
@@ -599,7 +601,7 @@ function startHost(){
         ${q.emoji?`<div class="emoji">${q.emoji}</div>`:""}
         <div class="qtext">${q.kind==="intro" ? (SP.ready ? `Lyssna! Låt ${q.num}` : `Spela låt ${q.num} i spellistan`) : esc(q.prompt)}</div>
         ${q.kind==="intro"?`<p style="font-size:clamp(1.1rem,2vw,2rem);margin:0">Skriv låt och artist i mobilen.</p>`:""}
-        ${q.kind==="intro" && SP.ready ? `<div style="margin-top:1.2em"><button class="btn sm" onclick="__spReplay('${q.id}')">▶ Spela igen (5 s)</button></div>` : ""}
+        ${q.kind==="intro" && SP.ready ? `<div style="margin-top:1.2em"><button class="btn sm" onclick="__spReplay('${q.id}')">▶ Spela igen (${snippetMs(q)/1000} s)</button></div>` : ""}
         <div class="chips">${teams.map(([id,t])=>`<span class="chip ${(t.done||{})[q.id]?"done":""}">${(t.done||{})[q.id]?"✓ ":""}${esc(t.name)}</span>`).join("")}</div>
         <p class="small" style="margin-top:1.2em">${doneCount} av ${teams.length} lag klara</p>
       </div>`;
