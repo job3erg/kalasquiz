@@ -177,11 +177,11 @@ const ROUNDS = [
     {kind:"intro", prompt:"Låt 1", parts:[{l:"Låt",a:["blinding lights"]},{l:"Artist",a:["the weeknd","weeknd","the weekend","weekend"]}]},
     {kind:"intro", prompt:"Låt 2", ms:8000, parts:[{l:"Låt",a:["flowers"]},{l:"Artist",a:["miley cyrus","miley"]}]},
     {kind:"intro", prompt:"Låt 3", parts:[{l:"Låt",a:["dance monkey"]},{l:"Artist",a:["tones and i","tones"]}]},
-    {kind:"intro", prompt:"Låt 4", parts:[{l:"Låt",a:["shake it off"]},{l:"Artist",a:["taylor swift","taylor"]}]},
+    {kind:"intro", prompt:"Låt 4", parts:[{l:"Låt",a:["good 4 u","good for you"]},{l:"Artist",a:["olivia rodrigo","olivia"]}]},
     {kind:"intro", prompt:"Låt 5", parts:[{l:"Låt",a:["apt"]},{l:"Artist",a:["rose","bruno mars","rose bruno mars"]}]},
     {kind:"intro", prompt:"Låt 6", parts:[{l:"Låt",a:["pink pony club"]},{l:"Artist",a:["chappell roan","chappell"]}]},
     {kind:"intro", prompt:"Låt 7", parts:[{l:"Låt",a:["beautiful things"]},{l:"Artist",a:["benson boone","benson"]}]},
-    {kind:"intro", prompt:"Låt 8", parts:[{l:"Låt",a:["lush life"]},{l:"Artist",a:["zara larsson","zara"]}]},
+    {kind:"intro", prompt:"Låt 8", parts:[{l:"Låt",a:["levitating"]},{l:"Artist",a:["dua lipa","dua"]}]},
   ]},
   { title:"Runda 2: Emoji-låtar", note:"Vilken låt är det?", qs:[
     {kind:"text", emoji:"☕️", prompt:"Vilken låt?", parts:[{l:"Låt",a:["espresso"]}]},
@@ -222,8 +222,8 @@ const ROUNDS = [
 
 /* Spotify: [titel, artist] för frågor där låten kan spelas upp automatiskt */
 const SP_TRACKS = {
-  0:[["Blinding Lights","The Weeknd"],["Flowers","Miley Cyrus"],["Dance Monkey","Tones and I"],["Shake It Off","Taylor Swift"],
-     ["APT.","ROSÉ Bruno Mars"],["Pink Pony Club","Chappell Roan"],["Beautiful Things","Benson Boone"],["Lush Life","Zara Larsson"]],
+  0:[["Blinding Lights","The Weeknd"],["Flowers","Miley Cyrus"],["Dance Monkey","Tones and I"],["good 4 u","Olivia Rodrigo"],
+     ["APT.","ROSÉ Bruno Mars"],["Pink Pony Club","Chappell Roan"],["Beautiful Things","Benson Boone"],["Levitating","Dua Lipa"]],
   1:[["Espresso","Sabrina Carpenter"],["Birds of a Feather","Billie Eilish"],["Bara Bada Bastu","KAJ"],["Watermelon Sugar","Harry Styles"],
      ["Bye Bye Bye","NSYNC"],["Murder on the Dancefloor","Sophie Ellis-Bextor"],["Golden","HUNTR/X"],["Running Up That Hill","Kate Bush"]],
 };
@@ -249,7 +249,7 @@ function answerText(q){
     finneas:"Finneas", finland:"Finland", "max martin":"Max Martin", hov1:"Hov1",
     "blinding lights":"Blinding Lights", "the weeknd":"The Weeknd",
     flowers:"Flowers", "miley cyrus":"Miley Cyrus", "dance monkey":"Dance Monkey", "tones and i":"Tones and I",
-    "shake it off":"Shake It Off", "taylor swift":"Taylor Swift"
+    "good 4 u":"good 4 u", "olivia rodrigo":"Olivia Rodrigo", levitating:"Levitating", "dua lipa":"Dua Lipa"
   };
   return q.parts.map(p=>pretty[p.a[0]] || p.a[0]).join(" – ");
 }
