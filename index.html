@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kalasquizet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#0b0b0b">
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{
+  --black:#0b0b0b; --lime:#C9F76F; --blue:#5B9DFF; --blush:#FBEFEA; --white:#fff; --coral:#FF7A66;
+  --ink:#0b0b0b; --red:var(--coral);
+  --font:"Figtree","Trebuchet MS","Segoe UI",system-ui,sans-serif;
+  /* theme: bg, text, shape colours a/b, card colour */
+  --bg:var(--black); --fg:var(--white); --a:var(--lime); --b:var(--white); --card:var(--blush);
+}
+body[data-theme="blush"]{--bg:var(--blush); --fg:var(--ink); --a:var(--lime); --b:var(--black); --card:#fff}
+body[data-theme="lime"]{--bg:var(--lime); --fg:var(--ink); --a:var(--black); --b:var(--white); --card:#fff}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  font-family:var(--font); color:var(--fg); background:var(--bg);
+  transition:background-color .45s, color .45s;
+  padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0);
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+button,input{font:inherit}
+.hidden{display:none !important}
+#app{min-height:100%;display:flex;flex-direction:column;position:relative;z-index:1}
+
+/* ---------- decoration: circles, tubes and an equalizer ---------- */
+.deco{position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0}
+.cluster{position:absolute}
+.dot{position:absolute; left:var(--x); top:var(--y); width:var(--s); height:var(--s); border-radius:50%;
+  background:var(--c); animation:float 5s ease-in-out infinite alternate; animation-delay:var(--dl,0s); transition:background-color .45s}
+@keyframes float{from{transform:translateY(-1.4vmin)} to{transform:translateY(1.4vmin)}}
+.tube{position:absolute; left:var(--x); top:var(--y); width:var(--w); height:var(--h); background:var(--c);
+  border-radius:0 0 calc(var(--w)/2) calc(var(--w)/2) / 0 0 calc(var(--w)*.22) calc(var(--w)*.22);
+  transform-origin:50% 100%; transform:rotate(var(--r)); animation:sway 3s ease-in-out infinite alternate; animation-delay:var(--dl,0s);
+  transition:background-color .45s}
+.tube::before{content:""; position:absolute; left:0; right:0; top:calc(var(--w)*-.22); height:calc(var(--w)*.44); border-radius:50%; background:var(--blue)}
+@keyframes sway{from{transform:rotate(calc(var(--r) - 5deg))} to{transform:rotate(calc(var(--r) + 5deg))}}
+.c-circles{left:-5vmin; top:30vh}
+.c-tubes{left:calc(100% - 27vmin); top:64vh}
+.bars{position:absolute; left:0; right:0; bottom:0; height:8vh; display:flex; align-items:flex-end; justify-content:space-between; gap:4px; padding:0 1vw}
+.bars i{flex:1; max-width:10px; height:100%; background:var(--a); border-radius:99px 99px 0 0; opacity:.85; transform-origin:bottom;
+  animation:eq 1.2s ease-in-out infinite alternate; transition:background-color .45s}
+@keyframes eq{from{transform:scaleY(var(--lo,.2))} to{transform:scaleY(var(--hi,1))}}
+
+/* sticker card: the memorable thing */
+.sticker{
+  background:var(--card); color:var(--ink); border-radius:34px;
+  border:4px solid var(--ink); box-shadow:10px 10px 0 var(--a); transition:background-color .45s, box-shadow .45s;
+}
+.tilt{transform:rotate(-1deg)}
+.btn{
+  border:3px solid var(--ink); border-radius:999px; padding:.7em 1.5em;
+  background:var(--lime); color:var(--ink); font-weight:800; cursor:pointer;
+  box-shadow:5px 5px 0 var(--blue); transition:transform .08s, box-shadow .08s;
+}
+.btn:hover{transform:translate(-1px,-1px); box-shadow:7px 7px 0 var(--blue)}
+.btn:active{transform:translate(4px,4px); box-shadow:1px 1px 0 var(--blue)}
+.btn:focus-visible,input:focus-visible{outline:4px solid var(--blue); outline-offset:3px}
+.btn.pink{background:var(--lime)} .btn.mint{background:var(--blue)} .btn.ghost{background:var(--white)}
+.btn[disabled]{opacity:.45; cursor:not-allowed}
+input.field{
+  width:100%; padding:.75em 1em; border-radius:999px; border:3px solid var(--ink);
+  background:#fff; color:var(--ink); font-size:1.15rem; font-weight:600;
+}
+label.lbl{display:block; font-weight:800; margin:.9em 0 .35em}
+
+/* ---------- HOST (TV) ---------- */
+.host{padding:3vh 4vw 9vh; flex:1; display:flex; flex-direction:column; gap:3vh}
+.host header{display:flex; justify-content:space-between; align-items:center; gap:2vw}
+.logo{font-weight:900; font-size:clamp(1.4rem,2.6vw,2.6rem); letter-spacing:-.03em}
+.logo span{display:inline-block; background:var(--lime); color:var(--ink); padding:.02em .45em .08em; border-radius:999px; transform:rotate(-3deg)}
+body[data-theme="lime"] .logo span{background:var(--ink); color:var(--lime)}
+.status{font-size:clamp(.8rem,1vw,1rem); opacity:.75; font-weight:600}
+.stage{flex:1; display:flex; align-items:center; justify-content:center}
+.host-card{width:min(1300px,100%); padding:5vh 5vw}
+.host-card.rings{width:min(1000px,68vw); text-align:center; border:0; border-radius:20vh; padding:7vh 5vw; box-shadow:
+  0 0 0 2.2vw var(--lime), 0 0 0 4.4vw #fff, 0 0 0 6.6vw var(--lime), 0 0 0 8.8vw #fff}
+.roundname{font-weight:800; font-size:clamp(1rem,1.6vw,1.6rem); opacity:.6}
+.qtext{font-weight:900; font-size:clamp(2rem,4.6vw,5rem); line-height:1.02; letter-spacing:-.035em; margin:.3em 0}
+.emoji{font-size:clamp(4rem,10vw,10rem); line-height:1.1; margin:.1em 0}
+.answer{font-weight:900; font-size:clamp(2rem,4vw,4.4rem); letter-spacing:-.03em; background:var(--lime); display:inline-block; padding:.05em .5em .12em; border-radius:999px; border:3px solid var(--ink); margin:.2em 0 .4em}
+.chips{display:flex; flex-wrap:wrap; gap:.6em; margin-top:2vh}
+.chip{padding:.4em .95em; border-radius:999px; border:3px solid var(--ink); background:#fff; color:var(--ink); font-weight:700; font-size:clamp(.9rem,1.4vw,1.5rem)}
+.chip.done{background:var(--lime)}
+.host-foot{display:flex; justify-content:space-between; align-items:center; gap:2vw; position:relative; z-index:2}
+.host-foot .btn{font-size:clamp(1.1rem,1.8vw,1.9rem)}
+.lobby-grid{display:grid; grid-template-columns:1.3fr 1fr; gap:4vw; align-items:center}
+.code{display:flex; flex-wrap:wrap; gap:.08em; font-weight:900; font-size:clamp(2.6rem,7.5vw,7.5rem); line-height:1; margin:.15em 0 .25em}
+.code .cl{display:grid; place-items:center; width:1.3em; height:1.3em; border-radius:50%; border:4px solid var(--ink)}
+.code .c0{background:var(--lime)} .code .c1{background:var(--blue)} .code .c2{background:var(--ink); color:var(--lime)} .code .c3{background:#fff}
+#qr{background:#fff; padding:14px; border-radius:26px; border:4px solid var(--ink); display:inline-block}
+#qr img,#qr canvas{display:block; width:min(28vw,340px)!important; height:auto!important}
+.url{font-size:clamp(.9rem,1.3vw,1.3rem); word-break:break-all; font-weight:600}
+.review{display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:1em; margin-top:1em}
+.rv{border:3px solid var(--ink); border-radius:22px; padding:.7em .9em; background:#fff}
+.rv h4{margin:0 0 .4em; font-size:1.2rem}
+.part{display:flex; align-items:center; justify-content:space-between; gap:.5em; margin:.3em 0}
+.part .given{font-size:1.05rem; overflow-wrap:anywhere}
+.mark{min-width:2.6em; padding:.25em .5em; border-radius:999px; border:3px solid var(--ink); font-weight:800; cursor:pointer; background:var(--coral)}
+.mark.ok{background:var(--lime)}
+.small{font-size:.9rem; opacity:.7}
+.board{list-style:none; padding:0; margin:1em 0 0}
+.board li{display:flex; justify-content:space-between; align-items:center; padding:.5em .9em; border-bottom:3px dashed #e3d0c8; font-size:clamp(1.3rem,2.4vw,2.6rem); font-weight:800}
+.board li .pl{display:inline-block; width:2.2em; font-weight:900}
+.board li:first-child{background:var(--lime); border-radius:999px; border-bottom-color:transparent}
+.winner-wrap{text-align:center}
+.trophy{font-size:clamp(5rem,12vw,12rem); display:inline-block; animation:pop 1s cubic-bezier(.2,1.6,.4,1) both}
+.winner-name{font-weight:900; font-size:clamp(3rem,8vw,9rem); line-height:1; letter-spacing:-.04em; color:var(--lime); animation:pop 1s .35s cubic-bezier(.2,1.6,.4,1) both}
+@keyframes pop{from{transform:scale(.2) rotate(-12deg); opacity:0} to{transform:none; opacity:1}}
+#confetti{position:fixed; inset:0; pointer-events:none; z-index:50}
+.corner{position:fixed; right:12px; bottom:calc(10px + env(safe-area-inset-bottom,0)); opacity:.35; font-size:.8rem; z-index:60}
+.corner:hover{opacity:1}
+.corner button{background:none; border:1px solid currentColor; color:var(--fg); border-radius:999px; padding:.3em .8em; cursor:pointer}
+
+/* ---------- PLAYER (mobile) ---------- */
+.player{padding:20px 18px 28px; max-width:520px; margin:0 auto; width:100%; flex:1; display:flex; flex-direction:column; gap:18px}
+.player .top{display:flex; justify-content:space-between; align-items:center; font-weight:900; font-size:1.2rem; letter-spacing:-.02em}
+.player .card{padding:22px 20px}
+.player h1{font-size:2.4rem; line-height:1; margin:.1em 0 .3em; letter-spacing:-.035em; font-weight:900}
+.player h2{font-size:1.65rem; line-height:1.1; margin:.2em 0 .5em; letter-spacing:-.025em; font-weight:900}
+.player .emoji{font-size:3.6rem}
+.player .btn{width:100%; font-size:1.25rem; margin-top:16px}
+.tf{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px}
+.tf button{padding:1.1em .5em; font-size:1.3rem; font-weight:900; border-radius:999px; border:3px solid var(--ink); background:#fff; color:var(--ink); cursor:pointer}
+.tf button.sel{background:var(--lime); box-shadow:inset 0 0 0 4px var(--ink)}
+.big-emoji{font-size:4rem; text-align:center}
+.center{text-align:center}
+.err{background:var(--coral); color:var(--ink); padding:.6em .9em; border-radius:18px; border:3px solid var(--ink); font-weight:700}
+.score-pill{background:var(--lime); color:var(--ink); padding:.15em .8em; border-radius:999px; border:3px solid var(--ink); font-weight:900}
+
+@media (max-width:800px){
+  .lobby-grid{grid-template-columns:1fr}
+  .c-circles{left:auto; right:-6vmin; top:auto; bottom:24vh}
+  .c-tubes{left:-4vmin; top:auto; bottom:-4vh}
+}
+@media (prefers-reduced-motion:reduce){ .trophy,.winner-name{animation:none} .btn{transition:none} .dot,.tube,.bars i{animation:none} }
+</style>
+</head>
+<body data-theme="dark">
+<div class="deco" aria-hidden="true">
+  <div class="cluster c-circles">
+    <i class="dot" style="--s:20vmin;--x:0;--y:0;--c:var(--a)"></i>
+    <i class="dot" style="--s:11vmin;--x:15vmin;--y:-9vmin;--c:var(--blue);--dl:-1s"></i>
+    <i class="dot" style="--s:8vmin;--x:-1vmin;--y:22vmin;--c:var(--b);--dl:-2s"></i>
+    <i class="dot" style="--s:5vmin;--x:11vmin;--y:24vmin;--c:var(--a);--dl:-3s"></i>
+  </div>
+  <div class="cluster c-tubes">
+    <i class="tube" style="--w:7vmin;--h:26vmin;--x:0;--y:-26vmin;--r:-6deg;--c:var(--a)"></i>
+    <i class="tube" style="--w:7vmin;--h:34vmin;--x:9vmin;--y:-34vmin;--r:4deg;--c:var(--b);--dl:-1s"></i>
+    <i class="tube" style="--w:7vmin;--h:20vmin;--x:18vmin;--y:-20vmin;--r:8deg;--c:var(--a);--dl:-2s"></i>
+  </div>
+  <div class="bars" id="bars"></div>
+</div>
+<div id="app"></div>
+<canvas id="confetti"></canvas>
+
+<script>
+/* ================== QUIZ CONTENT ================== */
+const ROUNDS = [
+  { title:"Runda 1: Gissa introt", note:"Spelledaren spelar 5 sekunder av låten. 1 poäng för låten, 1 för artisten.", qs:[
+    {kind:"intro", prompt:"Låt 1", parts:[{l:"Låt",a:["golden"]},{l:"Artist",a:["huntrx","huntr x","huntr/x","kpop demon hunters","k-pop demon hunters"]}]},
+    {kind:"intro", prompt:"Låt 2", parts:[{l:"Låt",a:["espresso"]},{l:"Artist",a:["sabrina carpenter","sabrina"]}]},
+    {kind:"intro", prompt:"Låt 3", parts:[{l:"Låt",a:["birds of a feather"]},{l:"Artist",a:["billie eilish","billie"]}]},
+    {kind:"intro", prompt:"Låt 4", parts:[{l:"Låt",a:["bara bada bastu"]},{l:"Artist",a:["kaj"]}]},
+    {kind:"intro", prompt:"Låt 5", parts:[{l:"Låt",a:["apt"]},{l:"Artist",a:["rose","bruno mars","rose bruno mars"]}]},
+    {kind:"intro", prompt:"Låt 6", parts:[{l:"Låt",a:["pink pony club"]},{l:"Artist",a:["chappell roan","chappell"]}]},
+    {kind:"intro", prompt:"Låt 7", parts:[{l:"Låt",a:["beautiful things"]},{l:"Artist",a:["benson boone","benson"]}]},
+    {kind:"intro", prompt:"Låt 8", parts:[{l:"Låt",a:["lush life"]},{l:"Artist",a:["zara larsson","zara"]}]},
+  ]},
+  { title:"Runda 2: Emoji-låtar", note:"Vilken låt är det?", qs:[
+    {kind:"text", emoji:"☕️", prompt:"Vilken låt?", parts:[{l:"Låt",a:["espresso"]}]},
+    {kind:"text", emoji:"🐦🪶", prompt:"Vilken låt?", parts:[{l:"Låt",a:["birds of a feather"]}]},
+    {kind:"text", emoji:"🧖‍♀️🛁🔥", prompt:"Vilken låt?", parts:[{l:"Låt",a:["bara bada bastu"]}]},
+    {kind:"text", emoji:"🍉🍬", prompt:"Vilken låt?", parts:[{l:"Låt",a:["watermelon sugar"]}]},
+    {kind:"text", emoji:"👋👋👋", prompt:"Vilken låt?", parts:[{l:"Låt",a:["bye bye bye"]}]},
+    {kind:"text", emoji:"💃🔪🪩", prompt:"Vilken låt?", parts:[{l:"Låt",a:["murder on the dancefloor","murder on the dance floor"]}]},
+    {kind:"text", emoji:"🥇", prompt:"Vilken låt?", parts:[{l:"Låt",a:["golden"]}]},
+    {kind:"text", emoji:"🏃‍♀️⛰️", prompt:"Vilken låt?", parts:[{l:"Låt",a:["running up that hill"]}]},
+  ]},
+  { title:"Runda 3: Föräldrarnas låtar", note:"Gamla låtar som blivit populära igen.", qs:[
+    {kind:"text", prompt:"Running Up That Hill med Kate Bush. Vilken serie gjorde den populär igen?", parts:[{l:"Svar",a:["stranger things"]}]},
+    {kind:"text", prompt:"Bye Bye Bye med *NSYNC. Vilken film gjorde den populär igen?", parts:[{l:"Svar",a:["deadpool","deadpool and wolverine","deadpool och wolverine","deadpool wolverine"]}]},
+    {kind:"text", prompt:"Murder on the Dancefloor. Vilken film gjorde den populär igen?", parts:[{l:"Svar",a:["saltburn"]}]},
+    {kind:"text", prompt:"Dreams med Fleetwood Mac blev viral på TikTok. Vad åkte killen i videon?", parts:[{l:"Svar",a:["skateboard","skate","longboard","skejt","skejtboard"]}], show:"Skateboard (och drack tranbärsjuice)"},
+    {kind:"text", prompt:"Vilket år vann ABBA Eurovision med Waterloo?", parts:[{l:"År",a:["1974"]}]},
+  ]},
+  { title:"Runda 4: Kluriga frågor", note:"Skriv ert bästa svar.", qs:[
+    {kind:"text", prompt:"Vad heter pojkbandet som är fienden i KPop Demon Hunters?", parts:[{l:"Svar",a:["saja boys","saja"]}]},
+    {kind:"text", prompt:"Vilken Disney-serie var Olivia Rodrigo med i innan hon slog igenom?", parts:[{l:"Svar",a:["high school musical","high school musical the musical the series","hsm"]}]},
+    {kind:"text", prompt:"Vad är Benson Boone känd för att göra på scen?", parts:[{l:"Svar",a:["bakatvolt","bakatvolter","volt","voltor","volter","backflip","backflips","frivolt"]}], show:"Bakåtvolter"},
+    {kind:"text", prompt:"Hur många gånger har Loreen vunnit Eurovision?", parts:[{l:"Antal",a:["2","tva","två"]}], show:"Två gånger (Euphoria och Tattoo)"},
+    {kind:"text", prompt:"Vad heter Billie Eilishs bror som gör låtarna med henne?", parts:[{l:"Namn",a:["finneas"]}]},
+    {kind:"text", prompt:"KAJ tävlade för Sverige i Eurovision, men vilket land kommer de från?", parts:[{l:"Land",a:["finland"]}]},
+    {kind:"text", prompt:"Vilken svensk producent har skrivit hits åt Britney Spears, Taylor Swift och The Weeknd?", parts:[{l:"Namn",a:["max martin"]}]},
+    {kind:"text", prompt:"Vilken artist var mest spelad i Sverige på Spotify 2025?", parts:[{l:"Artist",a:["hov1","hov 1","hov one"]}]},
+  ]},
+  { title:"Runda 5: Sant eller falskt", note:"Snabbt nu!", qs:[
+    {kind:"tf", prompt:"Avicii kom från Stockholm.", tf:true},
+    {kind:"tf", prompt:"Taylor Swifts album The Life of a Showgirl kom ut 2025.", tf:true},
+    {kind:"tf", prompt:"Zara Larsson vann Talang när hon var barn.", tf:true},
+    {kind:"tf", prompt:"Sabrina Carpenter har varit med i en Disney-serie.", tf:true},
+    {kind:"tf", prompt:"ABBA har fem medlemmar.", tf:false},
+    {kind:"tf", prompt:"Billie Eilish kommer från Kanada.", tf:false},
+  ]},
+];
+
+/* Flatten into steps */
+const STEPS = [];
+ROUNDS.forEach((r,ri)=>{
+  STEPS.push({type:"round", ri});
+  r.qs.forEach((q,qi)=>{ q.id = `r${ri}q${qi}`; q.ri = ri; q.num = qi+1; q.of = r.qs.length; STEPS.push({type:"q", q}); });
+});
+function answerText(q){
+  if(q.kind==="tf") return q.tf ? "Sant" : "Falskt";
+  if(q.show) return q.show;
+  const pretty = {
+    golden:"Golden", huntrx:"HUNTR/X", espresso:"Espresso", "sabrina carpenter":"Sabrina Carpenter",
+    "birds of a feather":"Birds of a Feather", "billie eilish":"Billie Eilish", "bara bada bastu":"Bara Bada Bastu",
+    kaj:"KAJ", apt:"APT.", rose:"Rosé & Bruno Mars", "pink pony club":"Pink Pony Club", "chappell roan":"Chappell Roan",
+    "beautiful things":"Beautiful Things", "benson boone":"Benson Boone", "lush life":"Lush Life", "zara larsson":"Zara Larsson",
+    "watermelon sugar":"Watermelon Sugar", "bye bye bye":"Bye Bye Bye", "murder on the dancefloor":"Murder on the Dancefloor",
+    "running up that hill":"Running Up That Hill", "stranger things":"Stranger Things", deadpool:"Deadpool & Wolverine",
+    saltburn:"Saltburn", "1974":"1974", "saja boys":"Saja Boys", "high school musical":"High School Musical: The Musical: The Series",
+    finneas:"Finneas", finland:"Finland", "max martin":"Max Martin", hov1:"Hov1"
+  };
+  return q.parts.map(p=>pretty[p.a[0]] || p.a[0]).join(" – ");
+}
+function maxPoints(q){ return q.kind==="tf" ? 1 : q.parts.length; }
+
+/* ================== HELPERS ================== */
+const $ = s => document.querySelector(s);
+const app = $("#app");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm = s => String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/&/g,"and").replace(/[^a-z0-9]/g,"");
+function lev(a,b){
+  const m=a.length,n=b.length; if(!m) return n; if(!n) return m;
+  let prev=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){ const cur=[i];
+    for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur; }
+  return prev[n];
+}
+function isMatch(given, accepts){
+  const g = norm(given); if(!g) return false;
+  return accepts.some(a=>{
+    const t = norm(a); if(!t) return false;
+    if(g===t) return true;
+    if(t.length>=3 && g.includes(t)) return true;
+    if(t.length>=5 && lev(g,t) <= Math.floor(t.length/5)) return true;
+    return false;
+  });
+}
+function lsGet(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+const setTheme = t => { document.body.dataset.theme = t; };
+(function(){ const bars=$("#bars"); for(let i=0;i<44;i++){ const b=document.createElement("i");
+  b.style.cssText=`--lo:${(.15+Math.random()*.2).toFixed(2)};--hi:${(.45+Math.random()*.55).toFixed(2)};animation-duration:${(.6+Math.random()*1).toFixed(2)}s;animation-delay:${(-Math.random()*2).toFixed(2)}s`;
+  bars.appendChild(b); } })();
+const PEER_PREFIX = "kalasquiz-2026-";
+const isHost = location.hash.replace("#","").toLowerCase()==="spelledare";
+
+/* ================== CONFETTI ================== */
+function confetti(seconds=6){
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const c=$("#confetti"), ctx=c.getContext("2d");
+  const resize=()=>{ c.width=innerWidth*devicePixelRatio; c.height=innerHeight*devicePixelRatio; };
+  resize(); addEventListener("resize",resize);
+  const cols=["#C9F76F","#5B9DFF","#FFFFFF","#FBEFEA","#C9F76F","#5B9DFF"];
+  const P=[]; const end=performance.now()+seconds*1000;
+  function spawn(n){ for(let i=0;i<n;i++) P.push({x:Math.random()*c.width, y:-20*devicePixelRatio, vx:(Math.random()-.5)*4, vy:2+Math.random()*4,
+    r:(5+Math.random()*7)*devicePixelRatio, a:Math.random()*6, va:(Math.random()-.5)*.3, col:cols[i%cols.length], sh:Math.random()<.5}); }
+  spawn(220);
+  (function tick(t){
+    ctx.clearRect(0,0,c.width,c.height);
+    if(t<end && P.length<900) spawn(6);
+    for(const p of P){ p.x+=p.vx*devicePixelRatio; p.y+=p.vy*devicePixelRatio; p.vy+=.03; p.a+=p.va;
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.a); ctx.fillStyle=p.col;
+      if(p.sh) ctx.fillRect(-p.r/2,-p.r/4,p.r,p.r/2); else { ctx.beginPath(); ctx.arc(0,0,p.r/2.4,0,7); ctx.fill(); }
+      ctx.restore(); }
+    for(let i=P.length-1;i>=0;i--) if(P[i].y>c.height+40) P.splice(i,1);
+    if(t<end || P.length) requestAnimationFrame(tick); else ctx.clearRect(0,0,c.width,c.height);
+  })(performance.now());
+}
+
+/* ================== HOST ================== */
+function startHost(){
+  let S = lsGet("kq-host", null);
+  if(!S || !S.code){
+    const L="ABCDEFGHJKLMNPRSTUVWXYZ"; let code=""; for(let i=0;i<4;i++) code+=L[Math.floor(Math.random()*L.length)];
+    S = {code, phase:"lobby", step:-1, teams:{}};
+  }
+  const save=()=>lsSet("kq-host",S);
+  const conns = new Map(); // peerId -> {conn, teamId}
+  let peer, peerStatus="Ansluter…", retries=0;
+
+  const joinUrl = () => location.origin + location.pathname + "?rum=" + S.code;
+  const curStep = () => STEPS[S.step];
+  const curQ = () => (curStep() && curStep().type==="q") ? curStep().q : null;
+  const teamScore = t => Object.values(t.marks||{}).reduce((s,arr)=>s+arr.filter(Boolean).length,0);
+  const ranking = () => Object.entries(S.teams).map(([id,t])=>({id,name:t.name,score:teamScore(t)})).sort((a,b)=>b.score-a.score || a.name.localeCompare(b.name,"sv"));
+  function placementOf(id){ const r=ranking(); const me=r.find(x=>x.id===id); if(!me) return null; return 1 + r.filter(x=>x.score>me.score).length; }
+  function winners(){ const r=ranking(); if(!r.length) return []; return r.filter(x=>x.score===r[0].score).map(x=>x.name); }
+
+  function autoMark(q){
+    for(const t of Object.values(S.teams)){
+      t.marks = t.marks || {}; t.answers = t.answers || {};
+      if(t.marks[q.id]) continue;
+      const a = t.answers[q.id];
+      if(q.kind==="tf") t.marks[q.id] = [a===q.tf];
+      else t.marks[q.id] = q.parts.map((p,i)=> isMatch(a && a[i], p.a));
+    }
+  }
+
+  function viewFor(teamId){
+    const t = S.teams[teamId];
+    const v = {t:"view", phase:S.phase, team: t ? {name:t.name, score:teamScore(t)} : null};
+    const st = curStep();
+    if(st && st.type==="round"){ v.round = {title:ROUNDS[st.ri].title, note:ROUNDS[st.ri].note}; }
+    const q = curQ();
+    if(q){
+      v.q = {id:q.id, kind:q.kind, prompt:q.prompt, emoji:q.emoji||"", num:q.num, of:q.of, round:ROUNDS[q.ri].title,
+             parts: q.kind==="tf" ? [] : q.parts.map(p=>p.l)};
+      if(t){ v.mine = (t.answers||{})[q.id]; v.done = !!(t.done||{})[q.id]; }
+      if(S.phase==="reveal"){
+        v.reveal = {answer:answerText(q), marks: t ? (t.marks||{})[q.id] : null, max:maxPoints(q)};
+      }
+    }
+    if(S.phase==="winner"||S.phase==="scores"){ v.winners = winners(); v.place = t ? placementOf(teamId) : null; v.count = Object.keys(S.teams).length; }
+    return v;
+  }
+  function broadcast(){
+    save();
+    for(const [pid,c] of conns){ if(c.conn.open){ try{ c.conn.send(viewFor(c.teamId)); }catch(e){} } }
+    render();
+  }
+
+  function onData(conn, msg){
+    const c = conns.get(conn.peer); if(!c || !msg || typeof msg!=="object") return;
+    if(msg.t==="hello"){
+      if(msg.teamId && S.teams[msg.teamId]){ c.teamId = msg.teamId; }
+      else if(msg.name){
+        const name = String(msg.name).trim().slice(0,30) || "Lag";
+        const existing = Object.entries(S.teams).find(([id,t])=>norm(t.name)===norm(name));
+        if(existing && msg.teamId===existing[0]) c.teamId = existing[0];
+        else if(existing){ conn.send({t:"error", msg:"Det lagnamnet är redan taget. Välj ett annat."}); return; }
+        else { const id = "t"+Math.random().toString(36).slice(2,9); S.teams[id]={name, answers:{}, marks:{}, done:{}}; c.teamId=id; }
+      } else { conn.send(viewFor(null)); return; }
+      conn.send({t:"joined", teamId:c.teamId, name:S.teams[c.teamId].name});
+      broadcast(); return;
+    }
+    if(msg.t==="answer" && c.teamId && S.phase==="question"){
+      const q = curQ(); if(!q || msg.qid!==q.id) return;
+      const t = S.teams[c.teamId];
+      if(q.kind==="tf") t.answers[q.id] = msg.a===true ? true : msg.a===false ? false : null;
+      else t.answers[q.id] = (Array.isArray(msg.a)?msg.a:[]).slice(0,q.parts.length).map(x=>String(x||"").slice(0,80));
+      t.done = t.done||{}; t.done[q.id] = !!msg.done;
+      broadcast();
+    }
+  }
+
+  function connectPeer(){
+    peer = new Peer(PEER_PREFIX + S.code, {debug:1});
+    peer.on("open", ()=>{ peerStatus="Redo"; retries=0; render(); });
+    peer.on("connection", conn=>{
+      conns.set(conn.peer, {conn, teamId:null});
+      conn.on("data", d=>onData(conn,d));
+      conn.on("close", ()=>{ conns.delete(conn.peer); render(); });
+      conn.on("error", ()=>{});
+    });
+    peer.on("disconnected", ()=>{ peerStatus="Tappade anslutningen, försöker igen…"; render(); setTimeout(()=>{ try{ peer.reconnect(); }catch(e){} },1500); });
+    peer.on("error", err=>{
+      if(err.type==="unavailable-id"){
+        peerStatus="Rummet startar om, vänta några sekunder…"; render();
+        try{ peer.destroy(); }catch(e){}
+        setTimeout(connectPeer, Math.min(3000+retries*1000,8000)); retries++;
+      } else if(err.type==="network"||err.type==="server-error"||err.type==="socket-error"){
+        peerStatus="Ingen kontakt med servern, försöker igen…"; render();
+      }
+    });
+  }
+
+  function next(){
+    if(S.phase==="lobby"){ S.step=0; S.phase="round"; }
+    else if(S.phase==="round"){ S.step++; S.phase = STEPS[S.step].type==="q" ? "question" : "round"; }
+    else if(S.phase==="question"){ autoMark(curQ()); S.phase="reveal"; }
+    else if(S.phase==="reveal"){
+      if(S.step+1 >= STEPS.length){ S.phase="winner"; }
+      else { S.step++; S.phase = STEPS[S.step].type==="q" ? "question" : "round"; }
+    }
+    else if(S.phase==="winner"){ S.phase="scores"; }
+    broadcast();
+    if(S.phase==="winner") confetti(7);
+  }
+  function resetQuiz(){
+    if(!confirm("Starta ett nytt quiz? Alla lag och poäng försvinner.")) return;
+    try{ localStorage.removeItem("kq-host"); }catch(e){}
+    location.reload();
+  }
+  window.__toggle = (tid, i)=>{ const q=curQ(); const t=S.teams[tid]; if(!q||!t||!t.marks[q.id]) return; t.marks[q.id][i]=!t.marks[q.id][i]; broadcast(); };
+  window.__kick = (tid)=>{ if(!confirm(`Ta bort laget "${S.teams[tid].name}"?`)) return; delete S.teams[tid]; broadcast(); };
+
+  function render(){
+    const teams = Object.entries(S.teams);
+    let body="", nextLabel="Nästa";
+    if(S.phase==="lobby"){
+      body = `<div class="sticker host-card tilt"><div class="lobby-grid">
+        <div>
+          <div class="roundname">Gå in på länken eller skanna koden. Rumskoden är</div>
+          <div class="code">${[...S.code].map((ch,i)=>`<span class="cl c${i%4}">${esc(ch)}</span>`).join("")}</div>
+          <p class="url">${esc(joinUrl())}</p>
+          <div class="chips">${teams.length? teams.map(([id,t])=>`<span class="chip done" title="Klicka för att ta bort" style="cursor:pointer" onclick="__kick('${id}')">${esc(t.name)}</span>`).join("") : `<span class="chip">Inga lag ännu</span>`}</div>
+        </div>
+        <div style="text-align:center"><div id="qr"></div></div>
+      </div></div>`;
+      nextLabel = "Starta quizet";
+    }
+    else if(S.phase==="round"){
+      const r = ROUNDS[curStep().ri];
+      body = `<div class="sticker host-card rings"><div class="qtext">${esc(r.title)}</div><p style="font-size:clamp(1.2rem,2.2vw,2.4rem);margin:0">${esc(r.note)}</p></div>`;
+      nextLabel = "Första frågan";
+    }
+    else if(S.phase==="question"){
+      const q = curQ(); const doneCount = teams.filter(([id,t])=>(t.done||{})[q.id]).length;
+      body = `<div class="sticker host-card">
+        <div class="roundname">${esc(ROUNDS[q.ri].title)}, fråga ${q.num} av ${q.of}</div>
+        ${q.emoji?`<div class="emoji">${q.emoji}</div>`:""}
+        <div class="qtext">${q.kind==="intro" ? `Spela låt ${q.num} i spellistan` : esc(q.prompt)}</div>
+        ${q.kind==="intro"?`<p style="font-size:clamp(1.1rem,2vw,2rem);margin:0">Skriv låt och artist i mobilen.</p>`:""}
+        <div class="chips">${teams.map(([id,t])=>`<span class="chip ${(t.done||{})[q.id]?"done":""}">${(t.done||{})[q.id]?"✓ ":""}${esc(t.name)}</span>`).join("")}</div>
+        <p class="small" style="margin-top:1.2em">${doneCount} av ${teams.length} lag klara</p>
+      </div>`;
+      nextLabel = "Visa svaret";
+    }
+    else if(S.phase==="reveal"){
+      const q = curQ();
+      body = `<div class="sticker host-card">
+        <div class="roundname">${esc(ROUNDS[q.ri].title)}, fråga ${q.num} av ${q.of}</div>
+        ${q.kind!=="intro" && q.emoji?`<div class="emoji" style="font-size:clamp(2.5rem,5vw,5rem)">${q.emoji}</div>`:""}
+        ${q.kind!=="intro" && !q.emoji?`<div style="font-size:clamp(1.2rem,2vw,2rem);font-weight:600">${esc(q.prompt)}</div>`:""}
+        <div class="answer">${esc(answerText(q))}</div>
+        <div class="small">Klicka på en markering för att ändra den om datorn bedömt fel.</div>
+        <div class="review">${teams.map(([id,t])=>{
+          const a=(t.answers||{})[q.id]; const m=(t.marks||{})[q.id]||[];
+          let parts;
+          if(q.kind==="tf") parts=`<div class="part"><span class="given">${a===true?"Sant":a===false?"Falskt":"<em>Inget svar</em>"}</span><button class="mark ${m[0]?"ok":""}" onclick="__toggle('${id}',0)">${m[0]?"✓":"✗"}</button></div>`;
+          else parts=q.parts.map((p,i)=>`<div class="part"><span class="given"><span class="small">${esc(p.l)}:</span> ${a&&a[i]?esc(a[i]):"<em>Inget svar</em>"}</span><button class="mark ${m[i]?"ok":""}" onclick="__toggle('${id}',${i})">${m[i]?"✓":"✗"}</button></div>`).join("");
+          return `<div class="rv"><h4>${esc(t.name)} <span class="small">(${teamScore(t)} p)</span></h4>${parts}</div>`;
+        }).join("")}</div>
+      </div>`;
+      nextLabel = S.step+1>=STEPS.length ? "Vem vann?" : "Nästa fråga";
+    }
+    else if(S.phase==="winner"){
+      const w = winners(); const top = ranking()[0];
+      body = `<div class="winner-wrap">
+        <div class="trophy">🏆</div>
+        <div style="font-size:clamp(1.4rem,3vw,3rem);font-weight:600">${w.length>1?"Delad vinst!":"Vinnare"}</div>
+        <div class="winner-name">${w.map(esc).join(" & ") || "Inga lag"}</div>
+        ${top?`<div style="font-size:clamp(1.4rem,3vw,3rem);font-weight:600;margin-top:.3em">${top.score} poäng</div>`:""}
+      </div>`;
+      nextLabel = "Visa alla lag";
+    }
+    else if(S.phase==="scores"){
+      const r = ranking();
+      const places = r.map(x=>1+r.filter(y=>y.score>x.score).length);
+      body = `<div class="sticker host-card"><div class="qtext" style="font-size:clamp(2rem,4vw,4rem)">Slutresultat</div>
+        <ol class="board">${r.map((x,i)=>`<li><span><span class="pl">${places[i]}.</span>${esc(x.name)}</span><span>${x.score} p</span></li>`).join("")}</ol></div>`;
+      nextLabel = "";
+    }
+    setTheme({round:"lime", question:"blush", scores:"blush"}[S.phase] || "dark");
+    app.innerHTML = `<div class="host">
+      <header><div class="logo"><span>Kalasquizet</span></div>
+        <div class="status">${esc(peerStatus)} · ${conns.size} uppkopplade · rum ${esc(S.code)}</div></header>
+      <div class="stage">${body}</div>
+      <div class="host-foot"><span class="small">Mellanslag eller pil höger går också till nästa.</span>
+        ${nextLabel?`<button class="btn pink" id="nextBtn">${esc(nextLabel)}</button>`:`<button class="btn ghost" id="againBtn">Nytt quiz</button>`}</div>
+    </div>
+    <div class="corner"><button id="resetBtn">Nytt quiz</button></div>`;
+    const nb=$("#nextBtn"); if(nb) nb.onclick=next;
+    const ab=$("#againBtn"); if(ab) ab.onclick=resetQuiz;
+    $("#resetBtn").onclick=resetQuiz;
+    if(S.phase==="lobby" && window.QRCode){ new QRCode($("#qr"), {text:joinUrl(), width:340, height:340, correctLevel:QRCode.CorrectLevel.M}); }
+  }
+  document.addEventListener("keydown", e=>{
+    if((e.key===" "||e.key==="ArrowRight") && S.phase!=="scores" && !e.target.closest("input,button")){ e.preventDefault(); next(); }
+  });
+  render(); connectPeer();
+  if(S.phase==="winner") confetti(7);
+}
+
+/* ================== PLAYER ================== */
+function startPlayer(){
+  const params = new URLSearchParams(location.search);
+  let code = (params.get("rum")||"").toUpperCase().replace(/[^A-Z]/g,"");
+  let me = code ? lsGet("kq-team-"+code, null) : null; // {teamId,name}
+  let peer=null, conn=null, view=null, status="", error="";
+  let draft = {}; // qid -> answer
+  let lastQ=null, lastKey="";
+
+  function send(m){ if(conn && conn.open) conn.send(m); }
+
+  function connect(){
+    if(!code) return render();
+    status="Ansluter…"; render();
+    if(!peer || peer.destroyed){
+      peer = new Peer({debug:1});
+      peer.on("open", openConn);
+      peer.on("error", err=>{
+        if(err.type==="peer-unavailable"){ status=""; error="Hittar inget quiz med koden "+code+". Kolla koden, eller vänta tills spelledaren har startat sidan."; render(); setTimeout(openConn,4000); }
+        else { status="Tappade kontakten, försöker igen…"; render(); }
+      });
+      peer.on("disconnected", ()=>{ setTimeout(()=>{ try{ peer.reconnect(); }catch(e){} },1500); });
+    } else openConn();
+  }
+  function openConn(){
+    if(conn && conn.open) return;
+    conn = peer.connect(PEER_PREFIX+code, {reliable:true});
+    conn.on("open", ()=>{ status=""; error=""; send({t:"hello", teamId: me&&me.teamId, name: me&&me.name}); render(); });
+    conn.on("data", onMsg);
+    conn.on("close", ()=>{ status="Tappade kontakten, försöker igen…"; render(); setTimeout(openConn,2000); });
+  }
+  function onMsg(m){
+    if(m.t==="joined"){ me={teamId:m.teamId, name:m.name}; lsSet("kq-team-"+code, me); error=""; }
+    else if(m.t==="error"){ error=m.msg; me=null; }
+    else if(m.t==="view"){
+      if(m.team===null && me){ /* host forgot us (new quiz) */ me=null; try{ localStorage.removeItem("kq-team-"+code); }catch(e){} }
+      const key = [m.phase, m.q&&m.q.id, m.done, m.team&&m.team.name, m.team&&m.team.score, m.round&&m.round.title].join("|");
+      const same = key===lastKey;
+      view=m; if(m.q) lastQ=m.q.id; lastKey=key;
+      if(same) return; // nothing changed for this phone; keep inputs and focus
+      if(m.phase==="winner" && m.place===1) confetti(6);
+      render();
+      return;
+    }
+    render();
+  }
+
+  function join(){
+    const nameEl=$("#teamName"), codeEl=$("#roomCode");
+    const c = codeEl ? codeEl.value.toUpperCase().replace(/[^A-Z]/g,"") : code;
+    const n = nameEl.value.trim();
+    if(c.length!==4){ error="Rumskoden har fyra bokstäver."; return render(); }
+    if(!n){ error="Skriv ert lagnamn."; return render(); }
+    if(c!==code){ code=c; history.replaceState(null,"","?rum="+c); try{ peer&&peer.destroy(); }catch(e){} peer=null; conn=null; }
+    me = {teamId:null, name:n}; error="";
+    if(conn && conn.open) send({t:"hello", name:n}); else connect();
+  }
+
+  function render(){
+    const top = `<div class="top"><span>Kalasquizet</span>${view&&view.team?`<span class="score-pill">${view.team.score} p</span>`:""}</div>`;
+    let body="";
+    const joined = me && me.teamId && view && view.team;
+    if(!joined){
+      body = `<div class="sticker card tilt">
+        <h1>Häng med!</h1>
+        ${!params.get("rum")?`<label class="lbl" for="roomCode">Rumskod (står på TV:n)</label><input class="field" id="roomCode" maxlength="4" autocapitalize="characters" autocomplete="off" value="${esc(code)}">`:""}
+        <label class="lbl" for="teamName">Ert lagnamn</label>
+        <input class="field" id="teamName" maxlength="30" autocomplete="off" value="${esc(me&&me.name||"")}">
+        ${error?`<p class="err">${esc(error)}</p>`:""}
+        ${status?`<p class="small">${esc(status)}</p>`:""}
+        <button class="btn pink" id="joinBtn">Gå med</button>
+      </div>`;
+    } else {
+      const v = view;
+      if(v.phase==="lobby"){
+        body = `<div class="sticker card center"><div class="big-emoji">🎤</div><h2>${esc(v.team.name)} är med!</h2><p>Quizet börjar snart. Titta på TV:n.</p></div>`;
+      } else if(v.phase==="round"){
+        body = `<div class="sticker card tilt"><h1>${esc(v.round.title)}</h1><p>${esc(v.round.note)}</p></div>`;
+      } else if(v.phase==="question"){
+        const q=v.q; const d = draft[q.id] ?? v.mine ?? (q.kind==="tf"?null:q.parts.map(()=>""));
+        draft[q.id]=d;
+        if(v.done){
+          body = `<div class="sticker card center"><div class="big-emoji">✅</div><h2>Klart!</h2><p>Väntar på de andra lagen.</p>
+            <button class="btn ghost" id="editBtn">Ändra svar</button></div>`;
+        } else {
+          let inputs;
+          if(q.kind==="tf") inputs = `<div class="tf"><button id="tfT" class="${d===true?"sel":""}">Sant</button><button id="tfF" class="${d===false?"sel":""}">Falskt</button></div>`;
+          else inputs = q.parts.map((l,i)=>`<label class="lbl" for="in${i}">${esc(l)}</label><input class="field ans" id="in${i}" data-i="${i}" autocomplete="off" autocorrect="off" spellcheck="false" value="${esc(d[i]||"")}">`).join("");
+          body = `<div class="sticker card">
+            <div class="small">${esc(q.round)}, fråga ${q.num} av ${q.of}</div>
+            ${q.emoji?`<div class="emoji">${q.emoji}</div>`:""}
+            <h2>${q.kind==="intro"?"Lyssna! Vilken låt är det?":esc(q.prompt)}</h2>
+            ${inputs}
+            <button class="btn mint" id="doneBtn" ${q.kind==="tf"&&d===null?"disabled":""}>Klar</button>
+          </div>`;
+        }
+      } else if(v.phase==="reveal"){
+        const r=v.reveal; const got=(r.marks||[]).filter(Boolean).length;
+        body = `<div class="sticker card center">
+          <div class="big-emoji">${got===r.max?"🎉":got>0?"👍":"🙈"}</div>
+          <h2>${got===r.max?"Rätt!":got>0?`Delvis rätt, ${got} av ${r.max} p`:"Inte riktigt"}</h2>
+          <p>Svaret var <strong>${esc(r.answer)}</strong></p></div>`;
+      } else if(v.phase==="winner"||v.phase==="scores"){
+        const won = v.place===1;
+        body = `<div class="sticker card center tilt"><div class="big-emoji">${won?"🏆":"⭐️"}</div>
+          <h1>${won?(v.winners.length>1?"Delad vinst!":"Ni vann!"):`Plats ${v.place} av ${v.count}`}</h1>
+          <p>${esc(v.team.name)} fick ${v.team.score} poäng.</p>
+          ${!won?`<p>Vinnare: <strong>${v.winners.map(esc).join(" & ")}</strong></p>`:""}</div>`;
+      }
+      if(status) body += `<p class="small center">${esc(status)}</p>`;
+    }
+    setTheme(joined ? ({round:"lime", question:"blush"}[view.phase] || "dark") : "dark");
+    app.innerHTML = `<div class="player">${top}${body}</div>`;
+    wire();
+  }
+  function wire(){
+    const jb=$("#joinBtn"); if(jb) jb.onclick=join;
+    const tn=$("#teamName"); if(tn) tn.onkeydown=e=>{ if(e.key==="Enter") join(); };
+    if(!view || !view.q) return;
+    const q=view.q;
+    document.querySelectorAll(".ans").forEach(el=>{
+      el.oninput=()=>{ draft[q.id][+el.dataset.i]=el.value; };
+      el.onkeydown=e=>{ if(e.key==="Enter"){ const nx=document.querySelector(`#in${+el.dataset.i+1}`); if(nx) nx.focus(); else submit(); } };
+    });
+    const t=$("#tfT"), f=$("#tfF");
+    if(t){ t.onclick=()=>{ draft[q.id]=true; render(); }; f.onclick=()=>{ draft[q.id]=false; render(); }; }
+    const db=$("#doneBtn"); if(db) db.onclick=submit;
+    const eb=$("#editBtn"); if(eb) eb.onclick=()=>{ send({t:"answer", qid:q.id, a:draft[q.id], done:false}); };
+    const first=$("#in0"); if(first && !first.value && document.activeElement===document.body) first.focus();
+  }
+  function submit(){
+    const q=view.q; send({t:"answer", qid:q.id, a:draft[q.id], done:true});
+  }
+  render(); if(code) connect();
+}
+
+/* ================== BOOT ================== */
+if(!window.Peer){
+  app.innerHTML = `<div class="player"><div class="sticker card"><h2>Sidan kunde inte ladda allt den behöver.</h2><p>Kolla att enheten är ansluten till internet och ladda om sidan.</p></div></div>`;
+} else if(isHost) startHost(); else startPlayer();
+addEventListener("hashchange", ()=>location.reload());
+</script>
+</body>
+</html>
