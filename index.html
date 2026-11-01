@@ -175,9 +175,9 @@ body[data-theme="lime"] .logo span{background:var(--ink); color:var(--lime)}
 const ROUNDS = [
   { title:"Runda 1: Gissa introt", note:"Spelledaren spelar 5 sekunder av låten. 1 poäng för låten, 1 för artisten.", qs:[
     {kind:"intro", prompt:"Låt 1", parts:[{l:"Låt",a:["golden"]},{l:"Artist",a:["huntrx","huntr x","huntr/x","kpop demon hunters","k-pop demon hunters"]}]},
-    {kind:"intro", prompt:"Låt 2", parts:[{l:"Låt",a:["espresso"]},{l:"Artist",a:["sabrina carpenter","sabrina"]}]},
-    {kind:"intro", prompt:"Låt 3", parts:[{l:"Låt",a:["birds of a feather"]},{l:"Artist",a:["billie eilish","billie"]}]},
-    {kind:"intro", prompt:"Låt 4", parts:[{l:"Låt",a:["bara bada bastu"]},{l:"Artist",a:["kaj"]}]},
+    {kind:"intro", prompt:"Låt 2", parts:[{l:"Låt",a:["flowers"]},{l:"Artist",a:["miley cyrus","miley"]}]},
+    {kind:"intro", prompt:"Låt 3", parts:[{l:"Låt",a:["dance monkey"]},{l:"Artist",a:["tones and i","tones"]}]},
+    {kind:"intro", prompt:"Låt 4", parts:[{l:"Låt",a:["shake it off"]},{l:"Artist",a:["taylor swift","taylor"]}]},
     {kind:"intro", prompt:"Låt 5", parts:[{l:"Låt",a:["apt"]},{l:"Artist",a:["rose","bruno mars","rose bruno mars"]}]},
     {kind:"intro", prompt:"Låt 6", parts:[{l:"Låt",a:["pink pony club"]},{l:"Artist",a:["chappell roan","chappell"]}]},
     {kind:"intro", prompt:"Låt 7", parts:[{l:"Låt",a:["beautiful things"]},{l:"Artist",a:["benson boone","benson"]}]},
@@ -211,18 +211,18 @@ const ROUNDS = [
     {kind:"text", prompt:"Vilken artist var mest spelad i Sverige på Spotify 2025?", parts:[{l:"Artist",a:["hov1","hov 1","hov one"]}]},
   ]},
   { title:"Runda 5: Sant eller falskt", note:"Snabbt nu!", qs:[
-    {kind:"tf", prompt:"Avicii kom från Stockholm.", tf:true},
-    {kind:"tf", prompt:"Taylor Swifts album The Life of a Showgirl kom ut 2025.", tf:true},
     {kind:"tf", prompt:"Zara Larsson vann Talang när hon var barn.", tf:true},
-    {kind:"tf", prompt:"Sabrina Carpenter har varit med i en Disney-serie.", tf:true},
     {kind:"tf", prompt:"ABBA har fem medlemmar.", tf:false},
-    {kind:"tf", prompt:"Billie Eilish kommer från Kanada.", tf:false},
+    {kind:"tf", prompt:"Avicii kom från Stockholm.", tf:true},
+    {kind:"tf", prompt:"Billie Eilish kommer från Kanada.", tf:false, show:"Hon kommer från USA (Los Angeles)"},
+    {kind:"tf", prompt:"Sabrina Carpenter har varit med i en Disney-serie.", tf:true},
+    {kind:"tf", prompt:"Taylor Swifts album The Life of a Showgirl kom ut 2025.", tf:true},
   ]},
 ];
 
 /* Spotify: [titel, artist] för frågor där låten kan spelas upp automatiskt */
 const SP_TRACKS = {
-  0:[["Golden","HUNTR/X"],["Espresso","Sabrina Carpenter"],["Birds of a Feather","Billie Eilish"],["Bara Bada Bastu","KAJ"],
+  0:[["Golden","HUNTR/X"],["Flowers","Miley Cyrus"],["Dance Monkey","Tones and I"],["Shake It Off","Taylor Swift"],
      ["APT.","ROSÉ Bruno Mars"],["Pink Pony Club","Chappell Roan"],["Beautiful Things","Benson Boone"],["Lush Life","Zara Larsson"]],
   1:[["Espresso","Sabrina Carpenter"],["Birds of a Feather","Billie Eilish"],["Bara Bada Bastu","KAJ"],["Watermelon Sugar","Harry Styles"],
      ["Bye Bye Bye","NSYNC"],["Murder on the Dancefloor","Sophie Ellis-Bextor"],["Golden","HUNTR/X"],["Running Up That Hill","Kate Bush"]],
@@ -236,7 +236,7 @@ ROUNDS.forEach((r,ri)=>{
   r.qs.forEach((q,qi)=>{ q.id = `r${ri}q${qi}`; q.ri = ri; q.num = qi+1; q.of = r.qs.length; STEPS.push({type:"q", q}); });
 });
 function answerText(q){
-  if(q.kind==="tf") return q.tf ? "Sant" : "Falskt";
+  if(q.kind==="tf"){ const b = q.tf ? "Sant" : "Falskt"; return q.show ? b+". "+q.show : b; }
   if(q.show) return q.show;
   const pretty = {
     golden:"Golden", huntrx:"HUNTR/X", espresso:"Espresso", "sabrina carpenter":"Sabrina Carpenter",
@@ -246,7 +246,9 @@ function answerText(q){
     "watermelon sugar":"Watermelon Sugar", "bye bye bye":"Bye Bye Bye", "murder on the dancefloor":"Murder on the Dancefloor",
     "running up that hill":"Running Up That Hill", "stranger things":"Stranger Things", deadpool:"Deadpool & Wolverine",
     saltburn:"Saltburn", "1974":"1974", "saja boys":"Saja Boys", "high school musical":"High School Musical: The Musical: The Series",
-    finneas:"Finneas", finland:"Finland", "max martin":"Max Martin", hov1:"Hov1"
+    finneas:"Finneas", finland:"Finland", "max martin":"Max Martin", hov1:"Hov1",
+    flowers:"Flowers", "miley cyrus":"Miley Cyrus", "dance monkey":"Dance Monkey", "tones and i":"Tones and I",
+    "shake it off":"Shake It Off", "taylor swift":"Taylor Swift"
   };
   return q.parts.map(p=>pretty[p.a[0]] || p.a[0]).join(" – ");
 }
@@ -617,7 +619,7 @@ function startHost(){
           let parts;
           if(q.kind==="tf") parts=`<div class="part"><span class="given">${a===true?"Sant":a===false?"Falskt":"<em>Inget svar</em>"}</span><button class="mark ${m[0]?"ok":""}" onclick="__toggle('${id}',0)">${m[0]?"✓":"✗"}</button></div>`;
           else parts=q.parts.map((p,i)=>`<div class="part"><span class="given"><span class="small">${esc(p.l)}:</span> ${a&&a[i]?esc(a[i]):"<em>Inget svar</em>"}</span><button class="mark ${m[i]?"ok":""}" onclick="__toggle('${id}',${i})">${m[i]?"✓":"✗"}</button></div>`).join("");
-          return `<div class="rv"><h4>${esc(t.name)} <span class="small">(${teamScore(t)} p)</span></h4>${parts}</div>`;
+          return `<div class="rv"><h4>${esc(t.name)}</h4>${parts}</div>`;
         }).join("")}</div>
       </div>`;
       nextLabel = S.step+1>=STEPS.length ? "Vem vann?" : "Nästa fråga";
@@ -721,7 +723,7 @@ function startPlayer(){
   }
 
   function render(){
-    const top = `<div class="top"><span>Kalasquizet</span>${view&&view.team?`<span class="score-pill">${view.team.score} p</span>`:""}</div>`;
+    const top = `<div class="top"><span>Kalasquizet</span>${view&&view.team&&(view.phase==="winner"||view.phase==="scores")?`<span class="score-pill">${view.team.score} p</span>`:""}</div>`;
     let body="";
     const joined = me && me.teamId && view && view.team;
     if(!joined){
