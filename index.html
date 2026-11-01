@@ -137,6 +137,13 @@ body[data-theme="lime"] .logo span{background:var(--ink); color:var(--lime)}
 .err{background:var(--coral); color:var(--ink); padding:.6em .9em; border-radius:18px; border:3px solid var(--ink); font-weight:700}
 .score-pill{background:var(--lime); color:var(--ink); padding:.15em .8em; border-radius:999px; border:3px solid var(--ink); font-weight:900}
 
+.btn.sm{font-size:1rem; padding:.4em 1em; box-shadow:3px 3px 0 var(--blue)}
+.sp-box{margin-top:2vh; display:flex; flex-wrap:wrap; gap:.6em; align-items:center}
+.sp-msg{color:#b3261e; font-weight:700; opacity:1}
+.sp-list{margin-top:2vh; display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:.3em 2em; font-size:.95rem}
+.sp-row{display:flex; justify-content:space-between; align-items:center; gap:.5em; border-bottom:2px dashed #e3d0c8; padding:.2em 0}
+.sp-row .mark{min-width:2.2em; padding:.1em .4em}
+
 @media (max-width:800px){
   .lobby-grid{grid-template-columns:1fr}
   .c-circles{left:auto; right:-6vmin; top:auto; bottom:24vh}
@@ -213,6 +220,15 @@ const ROUNDS = [
   ]},
 ];
 
+/* Spotify: [titel, artist] för frågor där låten kan spelas upp automatiskt */
+const SP_TRACKS = {
+  0:[["Golden","HUNTR/X"],["Espresso","Sabrina Carpenter"],["Birds of a Feather","Billie Eilish"],["Bara Bada Bastu","KAJ"],
+     ["APT.","ROSÉ Bruno Mars"],["Pink Pony Club","Chappell Roan"],["Beautiful Things","Benson Boone"],["Lush Life","Zara Larsson"]],
+  1:[["Espresso","Sabrina Carpenter"],["Birds of a Feather","Billie Eilish"],["Bara Bada Bastu","KAJ"],["Watermelon Sugar","Harry Styles"],
+     ["Bye Bye Bye","NSYNC"],["Murder on the Dancefloor","Sophie Ellis-Bextor"],["Golden","HUNTR/X"],["Running Up That Hill","Kate Bush"]],
+};
+ROUNDS.forEach((r,ri)=>r.qs.forEach((q,qi)=>{ const t=(SP_TRACKS[ri]||[])[qi]; if(t) q.sp=t; }));
+
 /* Flatten into steps */
 const STEPS = [];
 ROUNDS.forEach((r,ri)=>{
@@ -266,7 +282,8 @@ const setTheme = t => { document.body.dataset.theme = t; };
   b.style.cssText=`--lo:${(.15+Math.random()*.2).toFixed(2)};--hi:${(.45+Math.random()*.55).toFixed(2)};animation-duration:${(.6+Math.random()*1).toFixed(2)}s;animation-delay:${(-Math.random()*2).toFixed(2)}s`;
   bars.appendChild(b); } })();
 const PEER_PREFIX = "kalasquiz-2026-";
-const isHost = location.hash.replace("#","").toLowerCase()==="spelledare";
+const spReturn = !!lsGet("kq-sp-pending",null) && /[?&](code|error)=/.test(location.search); // tillbaka från Spotify-inloggning
+const isHost = location.hash.replace("#","").toLowerCase()==="spelledare" || spReturn;
 
 /* ================== CONFETTI ================== */
 function confetti(seconds=6){
@@ -289,6 +306,144 @@ function confetti(seconds=6){
     for(let i=P.length-1;i>=0;i--) if(P[i].y>c.height+40) P.splice(i,1);
     if(t<end || P.length) requestAnimationFrame(tick); else ctx.clearRect(0,0,c.width,c.height);
   })(performance.now());
+}
+
+/* ================== SPOTIFY (valfritt, bara spelledaren) ================== */
+const SP = {
+  clientId:"fb027e9836f240feb54bab717e602d96",
+  scopes:"streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state",
+  redirect: location.origin + location.pathname.replace(/index\.html$/,""),
+  tok: lsGet("kq-spotify", null), device:null, player:null, ready:false, status:"", tracks:{}, timer:null, showList:false,
+  onChange(){}
+};
+const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+async function spLogin(){
+  if(!window.crypto || !crypto.subtle || location.protocol==="file:" || location.protocol==="data:"){ SP.status="Spotify-inloggning kräver att sidan körs på https."; return SP.onChange(); }
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
+  const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
+  lsSet("kq-sp-pending",{verifier,state});
+  location.href = "https://accounts.spotify.com/authorize?" + new URLSearchParams({response_type:"code", client_id:SP.clientId, scope:SP.scopes,
+    redirect_uri:SP.redirect, state, code_challenge_method:"S256", code_challenge:challenge});
+}
+function spLogout(){
+  try{ localStorage.removeItem("kq-spotify"); }catch(e){}
+  try{ SP.player && SP.player.disconnect(); }catch(e){}
+  SP.tok=null; SP.player=null; SP.ready=false; SP.device=null; SP.tracks={}; SP.status=""; SP.onChange();
+}
+async function spTokenRequest(params){
+  const r = await fetch("https://accounts.spotify.com/api/token", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({client_id:SP.clientId, ...params})});
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error_description || j.error || "token");
+  SP.tok = {access:j.access_token, refresh:j.refresh_token || (SP.tok && SP.tok.refresh), exp:Date.now()+(j.expires_in-60)*1000};
+  lsSet("kq-spotify", SP.tok);
+}
+async function spFinishLogin(){
+  const p = new URLSearchParams(location.search), pend = lsGet("kq-sp-pending", null);
+  try{ localStorage.removeItem("kq-sp-pending"); }catch(e){}
+  history.replaceState(null, "", location.pathname + "#spelledare");
+  if(p.get("error") || !pend || !p.get("code") || p.get("state")!==pend.state){ SP.status="Spotify-inloggningen avbröts."; return; }
+  try{ await spTokenRequest({grant_type:"authorization_code", code:p.get("code"), redirect_uri:SP.redirect, code_verifier:pend.verifier}); }
+  catch(e){ SP.status="Spotify-inloggningen misslyckades: "+e.message; }
+}
+async function spToken(){
+  if(!SP.tok) return null;
+  if(Date.now() > SP.tok.exp){
+    try{ await spTokenRequest({grant_type:"refresh_token", refresh_token:SP.tok.refresh}); }
+    catch(e){ spLogout(); SP.status="Spotify-inloggningen har gått ut. Logga in igen."; SP.onChange(); return null; }
+  }
+  return SP.tok.access;
+}
+async function spApi(path, opt={}){
+  const t = await spToken(); if(!t) throw new Error("Inte inloggad på Spotify");
+  const r = await fetch("https://api.spotify.com/v1"+path, {...opt, headers:{Authorization:"Bearer "+t, "Content-Type":"application/json"}});
+  if(r.status===204) return null;
+  const j = await r.json().catch(()=>null);
+  if(!r.ok) throw Object.assign(new Error((j && j.error && j.error.message) || ("Spotify "+r.status)), {status:r.status});
+  return j;
+}
+function spInit(){
+  if(!SP.tok || SP.player) return;
+  SP.status = "Startar Spotify…";
+  const boot = ()=>{
+    SP.player = new Spotify.Player({name:"Kalasquizet", getOAuthToken:cb=>{ spToken().then(t=>{ if(t) cb(t); }); }, volume:.85});
+    SP.player.addListener("ready", ({device_id})=>{ SP.device=device_id; SP.ready=true; SP.status=""; spTransfer(); SP.onChange(); spResolveAll(); });
+    SP.player.addListener("not_ready", ()=>{ SP.ready=false; SP.status="Spotify tappade anslutningen, försöker igen…"; SP.onChange(); });
+    for(const e of ["initialization_error","authentication_error","account_error","playback_error"]){
+      SP.player.addListener(e, ({message})=>{
+        SP.status = e==="account_error" ? "Spotify-kontot måste ha Premium." : e==="initialization_error" ? "Webbläsaren stöder inte Spotify-uppspelning (prova Chrome eller Edge)." : "Spotify: "+message;
+        SP.onChange();
+      });
+    }
+    SP.player.connect();
+  };
+  if(window.Spotify) boot();
+  else {
+    window.onSpotifyWebPlaybackSDKReady = boot;
+    const s = document.createElement("script"); s.src="https://sdk.scdn.co/spotify-player.js";
+    s.onerror = ()=>{ SP.status="Kunde inte ladda Spotify."; SP.onChange(); };
+    document.head.appendChild(s);
+  }
+}
+const spTransfer = ()=> spApi("/me/player", {method:"PUT", body:JSON.stringify({device_ids:[SP.device], play:false})}).catch(()=>{});
+const spKey = q => q.sp.join("|");
+async function spFind(title, artist){
+  const j = await spApi("/search?"+new URLSearchParams({q:title+" "+artist, type:"track", limit:"5", market:"from_token"}));
+  const items = (j && j.tracks && j.tracks.items) || [];
+  const byTitle = items.filter(x=>norm(x.name).includes(norm(title)));
+  const pool = byTitle.length ? byTitle : items;
+  const byArtist = pool.filter(x=>x.artists.some(a=>norm(artist).includes(norm(a.name)) || norm(a.name).includes(norm(artist))));
+  const best = (byArtist.length ? byArtist : pool).slice().sort((a,b)=>(b.popularity||0)-(a.popularity||0))[0];
+  return best ? {uri:best.uri, name:best.name, artist:best.artists.map(a=>a.name).join(", ")} : {missing:true};
+}
+async function spTrackFor(q){
+  const k = spKey(q);
+  if(!SP.tracks[k]){ try{ SP.tracks[k] = await spFind(q.sp[0], q.sp[1]); }catch(e){ SP.status = e.status===403 ? "Spotify-kontot är inte tillagt som användare i appen (User Management)." : "Spotify: "+e.message; return null; } }
+  return SP.tracks[k];
+}
+async function spResolveAll(){
+  for(const s of STEPS) if(s.type==="q" && s.q.sp) await spTrackFor(s.q);
+  SP.onChange();
+}
+function spStop(){ clearTimeout(SP.timer); try{ SP.player && SP.player.pause().catch(()=>{}); }catch(e){} }
+async function spPlay(q, ms){
+  if(!SP.ready || !q || !q.sp) return;
+  clearTimeout(SP.timer);
+  try{ SP.player.activateElement(); }catch(e){}      // måste ske direkt i ett klick (webbläsarens ljudspärr)
+  const tr = await spTrackFor(q);
+  if(!tr || tr.missing){ if(tr) SP.status="Hittade inte "+q.sp[0]+" på Spotify."; return SP.onChange(); }
+  const play = ()=>spApi("/me/player/play?device_id="+SP.device, {method:"PUT", body:JSON.stringify({uris:[tr.uri], position_ms:0})});
+  try{
+    try{ await play(); } catch(e){ if(e.status!==404) throw e; await spTransfer(); await play(); }
+    if(SP.status){ SP.status=""; SP.onChange(); }
+    if(ms) SP.timer = setTimeout(spStop, ms);
+  }catch(e){
+    SP.status = e.status===403 ? "Spotify-kontot är inte tillagt som användare i appen (User Management) eller saknar Premium." : "Spotify: "+e.message;
+    SP.onChange();
+  }
+}
+const qById = id => { const s = STEPS.find(s=>s.type==="q" && s.q.id===id); return s && s.q; };
+window.__spTest = id => spPlay(qById(id), 5000);
+window.__spFull = id => spPlay(qById(id), 0);
+window.__spReplay = id => spPlay(qById(id), 5000);
+window.__spList = ()=>{ SP.showList = !SP.showList; SP.onChange(); };
+function spBadge(){ return !SP.tok ? "" : SP.ready ? " · Spotify ✓" : " · Spotify…"; }
+function spBox(){
+  const msg = SP.status ? `<span class="small sp-msg">${esc(SP.status)}</span>` : "";
+  if(!SP.tok) return `<div class="sp-box"><button class="btn sm" onclick="spLogin()">Logga in med Spotify</button><span class="small">Valfritt: spelar låtarna automatiskt (kräver Premium).</span>${msg}</div>`;
+  return `<div class="sp-box">${SP.ready?`<span class="chip done">Spotify är redo</span><button class="btn sm ghost" onclick="__spList()">${SP.showList?"Dölj":"Testa"} låtarna</button>`:`<span class="chip">Startar Spotify…</span>`}
+    <button class="btn sm ghost" onclick="spLogout()">Logga ut</button>${msg}</div>`;
+}
+function spList(){
+  if(!SP.tok || !SP.ready || !SP.showList) return "";
+  const rows = STEPS.filter(s=>s.type==="q" && s.q.sp).map(s=>{
+    const q=s.q, tr=SP.tracks[spKey(q)];
+    const label = `${esc(ROUNDS[q.ri].title.split(":")[0])}, ${q.num}`;
+    const found = !tr ? "söker…" : tr.missing ? "<strong>hittades inte</strong>" : `${esc(tr.name)} – ${esc(tr.artist)}`;
+    return `<div class="sp-row"><span><span class="small">${label}:</span> ${found}</span>${tr&&!tr.missing?`<button class="mark ok" onclick="__spTest('${q.id}')">▶</button>`:""}</div>`;
+  }).join("");
+  return `<div class="sp-list">${rows}</div><div class="small" style="margin-top:.6em">Kolla att rätt version hittats. Knappen spelar 5 sekunder.</div>`;
 }
 
 /* ================== HOST ================== */
@@ -389,6 +544,7 @@ function startHost(){
   }
 
   function next(){
+    spStop();
     if(S.phase==="lobby"){ S.step=0; S.phase="round"; }
     else if(S.phase==="round"){ S.step++; S.phase = STEPS[S.step].type==="q" ? "question" : "round"; }
     else if(S.phase==="question"){ autoMark(curQ()); S.phase="reveal"; }
@@ -399,6 +555,7 @@ function startHost(){
     else if(S.phase==="winner"){ S.phase="scores"; }
     broadcast();
     if(S.phase==="winner") confetti(7);
+    const nq = curQ(); if(S.phase==="question" && nq && nq.kind==="intro") spPlay(nq, 5000);
   }
   function resetQuiz(){
     if(!confirm("Starta ett nytt quiz? Alla lag och poäng försvinner.")) return;
@@ -418,9 +575,10 @@ function startHost(){
           <div class="code">${[...S.code].map((ch,i)=>`<span class="cl c${i%4}">${esc(ch)}</span>`).join("")}</div>
           <p class="url">${esc(joinUrl())}</p>
           <div class="chips">${teams.length? teams.map(([id,t])=>`<span class="chip done" title="Klicka för att ta bort" style="cursor:pointer" onclick="__kick('${id}')">${esc(t.name)}</span>`).join("") : `<span class="chip">Inga lag ännu</span>`}</div>
+          ${spBox()}
         </div>
         <div style="text-align:center"><div id="qr"></div></div>
-      </div></div>`;
+      </div>${spList()}</div>`;
       nextLabel = "Starta quizet";
     }
     else if(S.phase==="round"){
@@ -433,8 +591,9 @@ function startHost(){
       body = `<div class="sticker host-card">
         <div class="roundname">${esc(ROUNDS[q.ri].title)}, fråga ${q.num} av ${q.of}</div>
         ${q.emoji?`<div class="emoji">${q.emoji}</div>`:""}
-        <div class="qtext">${q.kind==="intro" ? `Spela låt ${q.num} i spellistan` : esc(q.prompt)}</div>
+        <div class="qtext">${q.kind==="intro" ? (SP.ready ? `Lyssna! Låt ${q.num}` : `Spela låt ${q.num} i spellistan`) : esc(q.prompt)}</div>
         ${q.kind==="intro"?`<p style="font-size:clamp(1.1rem,2vw,2rem);margin:0">Skriv låt och artist i mobilen.</p>`:""}
+        ${q.kind==="intro" && SP.ready ? `<div style="margin-top:1.2em"><button class="btn sm" onclick="__spReplay('${q.id}')">▶ Spela igen (5 s)</button></div>` : ""}
         <div class="chips">${teams.map(([id,t])=>`<span class="chip ${(t.done||{})[q.id]?"done":""}">${(t.done||{})[q.id]?"✓ ":""}${esc(t.name)}</span>`).join("")}</div>
         <p class="small" style="margin-top:1.2em">${doneCount} av ${teams.length} lag klara</p>
       </div>`;
@@ -447,6 +606,7 @@ function startHost(){
         ${q.kind!=="intro" && q.emoji?`<div class="emoji" style="font-size:clamp(2.5rem,5vw,5rem)">${q.emoji}</div>`:""}
         ${q.kind!=="intro" && !q.emoji?`<div style="font-size:clamp(1.2rem,2vw,2rem);font-weight:600">${esc(q.prompt)}</div>`:""}
         <div class="answer">${esc(answerText(q))}</div>
+        ${q.sp && SP.ready ? `<div><button class="btn sm" onclick="__spFull('${q.id}')">▶ Spela låten</button></div>` : ""}
         <div class="small">Klicka på en markering för att ändra den om datorn bedömt fel.</div>
         <div class="review">${teams.map(([id,t])=>{
           const a=(t.answers||{})[q.id]; const m=(t.marks||{})[q.id]||[];
@@ -478,7 +638,7 @@ function startHost(){
     setTheme({round:"lime", question:"blush", scores:"blush"}[S.phase] || "dark");
     app.innerHTML = `<div class="host">
       <header><div class="logo"><span>Kalasquizet</span></div>
-        <div class="status">${esc(peerStatus)} · ${conns.size} uppkopplade · rum ${esc(S.code)}</div></header>
+        <div class="status">${esc(peerStatus)} · ${conns.size} uppkopplade · rum ${esc(S.code)}${spBadge()}</div></header>
       <div class="stage">${body}</div>
       <div class="host-foot"><span class="small">Mellanslag eller pil höger går också till nästa.</span>
         ${nextLabel?`<button class="btn pink" id="nextBtn">${esc(nextLabel)}</button>`:`<button class="btn ghost" id="againBtn">Nytt quiz</button>`}</div>
@@ -492,7 +652,9 @@ function startHost(){
   document.addEventListener("keydown", e=>{
     if((e.key===" "||e.key==="ArrowRight") && S.phase!=="scores" && !e.target.closest("input,button")){ e.preventDefault(); next(); }
   });
+  SP.onChange = render;
   render(); connectPeer();
+  if(spReturn) spFinishLogin().then(()=>{ render(); spInit(); }); else spInit();
   if(S.phase==="winner") confetti(7);
 }
 
