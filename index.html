@@ -435,6 +435,10 @@ function spBox(){
   return `<div class="sp-box">${SP.ready?`<span class="chip done">Spotify är redo</span><button class="btn sm ghost" onclick="__spList()">${SP.showList?"Dölj":"Testa"} låtarna</button>`:`<span class="chip">Startar Spotify…</span>`}
     <button class="btn sm ghost" onclick="spLogout()">Logga ut</button>${msg}</div>`;
 }
+function spHeader(){   // inloggning/felmeddelande i alla steg utom lobbyn (där finns hela rutan)
+  if(!SP.tok) return ` <button class="btn sm" onclick="spLogin()">Logga in med Spotify</button>${SP.status?` <span class="sp-msg">${esc(SP.status)}</span>`:""}`;
+  return SP.status ? ` <span class="sp-msg">${esc(SP.status)}</span>` : "";
+}
 function spList(){
   if(!SP.tok || !SP.ready || !SP.showList) return "";
   const rows = STEPS.filter(s=>s.type==="q" && s.q.sp).map(s=>{
@@ -638,7 +642,7 @@ function startHost(){
     setTheme({round:"lime", question:"blush", scores:"blush"}[S.phase] || "dark");
     app.innerHTML = `<div class="host">
       <header><div class="logo"><span>Kalasquizet</span></div>
-        <div class="status">${esc(peerStatus)} · ${conns.size} uppkopplade · rum ${esc(S.code)}${spBadge()}</div></header>
+        <div class="status">${esc(peerStatus)} · ${conns.size} uppkopplade · rum ${esc(S.code)}${spBadge()}${S.phase!=="lobby" ? spHeader() : ""}</div></header>
       <div class="stage">${body}</div>
       <div class="host-foot"><span class="small">Mellanslag eller pil höger går också till nästa.</span>
         ${nextLabel?`<button class="btn pink" id="nextBtn">${esc(nextLabel)}</button>`:`<button class="btn ghost" id="againBtn">Nytt quiz</button>`}</div>
